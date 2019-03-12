@@ -1,0 +1,146 @@
+---
+title: "leaflet"
+author: "Yi Li"
+date: "3/11/2019"
+output: html_document
+---
+# Learn How to Use Leaflet
+Leaflet is a widely used open source JavaScript library used to build web mapping applications. First released in 2011, it supports most mobile and desktop platforms, supporting HTML5 and CSS3. 
+
+## Install Leaflt from github
+devtools: a package development tools for R.
+```{r}
+install.packages("devtools")
+library(devtools)
+devtools::install_github("rstudio/leaflet")
+library(leaflet)
+```
+
+## Create a simple map
+
+```{r}
+m <- leaflet() %>%  # Create a map widget by calling leaflet
+  addTiles() %>%    # Add default OpenStreetMap map tiles
+  addMarkers(lat=40.7484405, lng=-73.9878531, popup="Empire State Building")
+m  # Print the map widget to display it
+```
+
+## leaflet() widget = map + data
+the leaflet() widget consists of two parts:
+• map widget with initializing options to set up the map and map options to manipulate the attributes of the map
+• data layer, including shape files and other associated data. You can add that right away or at a later time.
+
+## Example 1: Police Complaints in NYC
+https://data.cityofnewyork.us/Public-Safety/NYPD-Complaint-Map-Year-to-Date-/2fra-mtpn
+```{r}
+# Get data on NYC police complaints
+library(readr)
+library(dplyr)
+nypd <- read_csv("NYPD_Complaint_2018-06_Manhattan.csv")
+# Remove values with missing coordinates
+nypd <- nypd %>% filter(
+  is.na(nypd$Latitude)==FALSE &
+  is.na(nypd$Longitude)==FALSE)
+# Plot
+leaflet(nypd) %>% 
+  addTiles() %>% # add the background map 
+  addCircles(lng = ~Longitude, lat = ~Latitude) # lng = ~Longitude, lat = ~Latitude  can be removed
+```
+## To Change the background tiles...
+Just copy the generated url from the JavaScript code into the addTiles layer or write the name of the provider into the addProviderTiles object
+there are lots (~100) of other options at http://leaflet-extras.github.io/leaflet-providers/preview/
+```{r}
+(m = leaflet() %>% addTiles() %>% setView( lng = 2.34, lat = 48.85, zoom = 5 ) %>%
+    addProviderTiles("NASAGIBS.ViirsEarthAtNight2012"))
+
+```
+## Web Map Service (WMS) tiles
+Global population distribution (in 2015)
+```{r}
+leaflet() %>% addTiles() %>% setView(-93.65, 42.0285, zoom = 4) %>%  addWMSTiles(
+"http://sedac.ciesin.columbia.edu/geoserver/wms",
+layers = "gpw-v4:gpw-v4-population-count_2015",
+options = WMSTileOptions(format = "image/png", transparent = TRUE),
+tileOptions(tms = TRUE),
+attribution = "SEDAC @ Columbia University")
+```
+##  Using providers available directly in leaflet
+One way is to use the provider name
+```{r}
+leaflet(nypd) %>%
+  addProviderTiles("Stamen.TonerLite") %>% # Using the Provider Name
+  addCircles(col="orange")  
+```
+The other is to use the provider url
+```{r}
+leaflet(nypd) %>%
+  addTiles('http://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png') %>%
+    # Using the provider URL (as in Javascript library)
+  addCircles(col="orange")
+```
+## What is marker
+It represent unique locations on the map.
+## Try with nypd
+```{r}
+m <- leaflet(nypd) %>% 
+     addTiles('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png') %>%
+     setView(-73.9949344, 40.7179112, zoom = 14)
+m %>% addCircles(col="orange")
+```
+### Data Wrangling
+Select some offense indluding theft, harrassment, drugs etc.
+```{r}
+# Selected offenses
+# sort(table(nypd$offense_desc1))
+off <- nypd$offense_desc1 
+offsel <- NA
+offsel <- ifelse(off=="GRAND LARCENY" | off=="PETIT LARCENY" | off=="THEFT-FRAUD" | off=="THEFT OF SERVICES", "Theft", offsel)
+offsel <- ifelse(off=="HARRASSMENT", "Harrassment", offsel)
+offsel <- ifelse(off=="ASSAULT 3 & RELATED OFFENSES" | off=="FELONY ASSAULT", "Assault", offsel)
+offsel <- ifelse(off=="DANGEROUS DRUGS", "Drugs", offsel)
+offsel <- ifelse(is.na(offsel), "Other Crime", offsel)
+# add a new column
+nypd$offsel1 <- offsel
+```
+### Select a palette
+```{r}
+library(RColorBrewer)
+pal = colorFactor("Set1", domain = nypd$offsel1) # Grab a palette
+color_offsel1 = pal(nypd$offsel1)
+m %>% addCircles(color = color_offsel1) # Set color of points
+```
+
+### Add legend and pop-pup
+```{r}
+# pop-pup with details
+content <- paste("What:",nypd$offense_desc1,"<br/>",
+                 "When:",nypd$date,"<br/>",
+                 "Where:",nypd$premise_type,"<br/>",
+                 "Severity:",nypd$crimelevel,"<br/>")
+
+mpop2 <- m %>% addCircles(color=color_offsel1, popup = content) %>%
+  addLegend(pal = pal, values = ~nypd$offsel1, title = "Crimes")
+
+mpop2
+```
+## Cluster the points
+To improve user experience, we can **cluster points** on the map. 
+These **clusters map back into individual points** as users **zoom** into an area of the map.
+I like this interactive plot. 
+```{r}
+mclust <- m %>% addCircleMarkers(color = color_offsel1, 
+                       popup = content,
+                       clusterOptions = markerClusterOptions()) #<<
+mclust
+```
+
+
+
+
+
+
+
+
+
+
+
